@@ -1,12 +1,10 @@
 // REQUIRES
 // ---------------------------------------------------
-require('dotenv').config();
 const express = require('express');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
-const encrypt = require('mongoose-encryption');
-
+const bcrypt = require('bcrypt');
 
 // SETUP
 // ---------------------------------------------------
@@ -14,6 +12,7 @@ const app = express();
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
+const salt_rounds = 10;
 
 // DB SETUP
 // ---------------------------------------------------
@@ -25,14 +24,8 @@ const userSchema = new mongoose.Schema({
 const secretSchema = new mongoose.Schema({
     secret:''
 });
-// DB Encryption BEFORE defining models!!!
-userSchema.plugin(encrypt, {
-    secret: process.env.SECRET_STRING, 
-    encryptedFields: ['password']
-});
 const User = new mongoose.model('User', userSchema);
 const Secret = new mongoose.model('Secret', secretSchema);
-
 
 // ROUTES
 // ---------------------------------------------------
@@ -46,16 +39,18 @@ app.route('/register')
         res.render('register');
     })
     .post((req, res) => {
-        const newUser = new User({
-            email: req.body.username,
-            password: req.body.password
-        });
-        newUser.save((err) => {
-            if (err) {
-                console.log(err);
-            } else {
-                res.redirect('/secrets');
-            }
+        bcrypt.hash(req.body.password, salt_rounds, (err, hash) => {
+            const newUser = new User({
+                email: req.body.username,
+                password: hash
+            });
+            newUser.save((err) => {
+                if (err) {
+                    console.log(err);
+                } else {
+                    res.redirect('/secrets');
+                }
+            });
         });
     });
 
@@ -66,14 +61,16 @@ app.route('/login')
     .post((req, res) => {
         User.findOne({email:req.body.username}, (err, foundUser) => {
             if (foundUser) {
-               if (foundUser.password === req.body.password) {
-                    res.redirect('/secrets');
-               } else {
-                    res.render('login', {
-                        wrongNotice: 'Password incorrect', 
-                        userName: req.body.username
-                    });
-               }
+               bcrypt.compare(req.body.password, foundUser.password, (err, result) => {
+                    if (result === true) {
+                        res.redirect('/secrets');
+                    } else {
+                        res.render('login', {
+                            wrongNotice: 'Password incorrect', 
+                            userName: req.body.username
+                        });
+                    }
+               })
             } else {
                 res.render('login', {
                     wrongNotice: 'Username (EMail) not found',
