@@ -38,7 +38,8 @@ userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
 
 const secretSchema = new mongoose.Schema({
-    secret:''
+    secret:'',
+    submittingUser: {}
 });
 
 const User = new mongoose.model('User', userSchema);
@@ -138,12 +139,17 @@ app.route('/secrets')
 
 app.route('/submit')
     .get((req, res) => {
-        res.render('submit');
+        if (req.isAuthenticated()) {
+            res.render('submit');
+        } else {
+            res.redirect('/login');
+        } 
     })
     .post((req, res) => {
         if (req.body.secret) {
             const newSecret = new Secret({
-                secret: req.body.secret
+                secret: req.body.secret,
+                submittingUser: req.user
             });
             newSecret.save();
             res.redirect('/secrets');
